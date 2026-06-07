@@ -1,0 +1,16 @@
+# Raw and derived datasets
+Raw Data/Data/*.csv
+Raw Data/Data/*.tsv
+Raw Data/Data/*.parquet
+Raw Data/Data/*.xlsx
+Raw Data/Data/*.xls
+Raw Data/Data/*.json
+Raw Data/Data/*.pkl
+
+# Generated family outputs
+Family Dimention/Code/outputs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
