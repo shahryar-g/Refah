@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 RAW_TO_CANONICAL = {
     "Parent_Id": "Id_Parent",
@@ -55,17 +57,15 @@ RAW_TO_CANONICAL = {
 
 
 FINANCIAL_YEAR_COMPONENTS = {
-    "financial_1398_total": ["1398_CardPerMonth"],
-    "financial_1399_total": ["1399_CardPerMonth", "1399_MandehAval", "1399_MandehAkhar"],
-    "financial_1400_total": ["1400_CardPerMonth", "1400_Variz", "1400_MandehAval", "1400_MandehAkhar"],
+    "financial_1398_total": [],
+    "financial_1399_total": ["1399_MandehAval", "1399_MandehAkhar"],
+    "financial_1400_total": ["1400_Variz", "1400_MandehAval", "1400_MandehAkhar"],
     "financial_1401_total": [
-        "1401_CardPerMonth",
         "1401_CardBeCardPerMonth",
         "1401_PayaPerMonth",
         "1401_SatnaPerMonth",
     ],
     "financial_1402_total": [
-        "1402_CardPerMonth",
         "1402_CardBeCardPerMonth",
         "1402_PayaPerMonth",
         "1402_SatnaPerMonth",
@@ -77,8 +77,11 @@ OUTPUT_SCHEMA = [
     # identity and location
     {"output": "family_id", "source": "Id_Parent", "aggregation": "head"},
     {"output": "postal_code_7", "source": "Digits7postalcode_Dashboard", "aggregation": "head"},
+    {"output": "postal_code_5", "source": "Digits7postalcode_Dashboard", "aggregation": "first 5 digits"},
     {"output": "county", "source": "SabteAhval_countyname", "aggregation": "head"},
+    {"output": "county_code", "source": "SabteAhval_countyname", "aggregation": "numeric encoding"},
     {"output": "province", "source": "SabteAhval_provincename", "aggregation": "head"},
+    {"output": "province_code", "source": "SabteAhval_provincename", "aggregation": "numeric encoding"},
     {"output": "is_urban", "source": "isurban", "aggregation": "head"},
     {"output": "welfare_decile", "source": "Decile", "aggregation": "head"},
     {"output": "welfare_percentile", "source": "Percentile", "aggregation": "head"},
@@ -102,11 +105,16 @@ OUTPUT_SCHEMA = [
     {"output": "total_stock_portfolio", "source": "NetPortfoValue_Bourse", "aggregation": "sum"},
     {"output": "income_per_capita", "source": "Daramad", "aggregation": "total_income / family_size"},
     # bank and financial totals
-    {"output": "financial_1398_total", "source": None, "aggregation": "sum of 1398 financial components"},
-    {"output": "financial_1399_total", "source": None, "aggregation": "sum of 1399 financial components"},
-    {"output": "financial_1400_total", "source": None, "aggregation": "sum of 1400 financial components"},
-    {"output": "financial_1401_total", "source": None, "aggregation": "sum of 1401 financial components"},
-    {"output": "financial_1402_total", "source": None, "aggregation": "sum of 1402 financial components"},
+    {"output": "financial_1398_total", "source": None, "aggregation": "sum of non-card 1398 financial components"},
+    {"output": "financial_1399_total", "source": None, "aggregation": "sum of non-card 1399 financial components"},
+    {"output": "financial_1400_total", "source": None, "aggregation": "sum of non-card 1400 financial components"},
+    {"output": "financial_1401_total", "source": None, "aggregation": "sum of non-card 1401 financial components"},
+    {"output": "financial_1402_total", "source": None, "aggregation": "sum of non-card 1402 financial components"},
+    {"output": "card_spend_1398_total", "source": "1398_CardPerMonth", "aggregation": "sum"},
+    {"output": "card_spend_1399_total", "source": "1399_CardPerMonth", "aggregation": "sum"},
+    {"output": "card_spend_1400_total", "source": "1400_CardPerMonth", "aggregation": "sum"},
+    {"output": "card_spend_1401_total", "source": "1401_CardPerMonth", "aggregation": "sum"},
+    {"output": "card_spend_1402_total", "source": "1402_CardPerMonth", "aggregation": "sum"},
     # travel
     {"output": "air_trips_nonpilgrimage", "source": "99to95_TripCountAirNonPilgrimage", "aggregation": "sum"},
     {"output": "air_trips_pilgrimage", "source": "99to95_TripCountAirPilgrimage", "aggregation": "sum"},
@@ -156,13 +164,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("Raw Data/Data/sample_1402.csv"),
+        default=REPO_ROOT / "Data" / "Raw" / "sample_1402.csv",
         help="Path to the individual-level CSV",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("Family Dimention/Code/outputs/family_dimension.csv"),
+        default=REPO_ROOT / "Data" / "Family_Dimension" / "family_dimension.csv",
         help="Path for the family-level CSV",
     )
     return parser.parse_args()
@@ -181,6 +189,13 @@ def fill_binary(series: pd.Series) -> pd.Series:
 
 def fill_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
+
+
+def encode_categories(series: pd.Series) -> pd.Series:
+    values = series.fillna("__MISSING__").astype(str)
+    unique_values = sorted(values.unique())
+    mapping = {value: idx for idx, value in enumerate(unique_values, start=1)}
+    return values.map(mapping).astype("int64")
 
 
 def build_family_dataset(df: pd.DataFrame) -> pd.DataFrame:
@@ -215,14 +230,9 @@ def build_family_dataset(df: pd.DataFrame) -> pd.DataFrame:
         "IsBimePardaz",
         "1399_MandehAval",
         "1399_MandehAkhar",
-        "1399_CardPerMonth",
         "1400_Variz",
         "1400_MandehAval",
         "1400_MandehAkhar",
-        "1400_CardPerMonth",
-        "1398_CardPerMonth",
-        "1401_CardPerMonth",
-        "1402_CardPerMonth",
         "1401_CardBeCardPerMonth",
         "1402_CardBeCardPerMonth",
         "1401_SatnaPerMonth",
@@ -366,6 +376,11 @@ def build_family_dataset(df: pd.DataFrame) -> pd.DataFrame:
     for output_name, source_columns in FINANCIAL_YEAR_COMPONENTS.items():
         family[output_name] = group[source_columns].sum().sum(axis=1)
 
+    for year in ["1398", "1399", "1400", "1401", "1402"]:
+        card_col = f"{year}_CardPerMonth"
+        output_col = f"card_spend_{year}_total"
+        family[output_col] = group[card_col].sum()
+
     # Head-based fields with fallback to the first non-null family value.
     head_field_map = [
         ("Digits7postalcode_Dashboard", "postal_code_7"),
@@ -383,6 +398,9 @@ def build_family_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["is_urban", "welfare_decile", "welfare_percentile", "head_gender", "head_age"]:
         family[col] = pd.to_numeric(family[col], errors="coerce").fillna(0).round().astype("int64")
+    family["postal_code_5"] = family["postal_code_7"].fillna("").astype(str).str[:5].replace("", np.nan)
+    family["county_code"] = encode_categories(family["county"])
+    family["province_code"] = encode_categories(family["province"])
 
     # Normalize output dtypes for the key count/binary columns.
     int_columns = [

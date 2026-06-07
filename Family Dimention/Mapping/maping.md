@@ -27,8 +27,11 @@ Before any aggregation, compute these two helper columns on the individual table
 |---|---|---|---|
 | 1 | `Id_Parent` | `family_id` | Use as the family's unique identifier |
 | 4 | `Digits7postalcode_Dashboard` | `postal_code_7` | Head's value |
+| 4 | `Digits7postalcode_Dashboard` | `postal_code_5` | First 5 digits of postal code |
 | 5 | `SabteAhval_countyname` | `county` | Head's value |
+| 5 | `SabteAhval_countyname` | `county_code` | Numeric encoding of county |
 | 6 | `SabteAhval_provincename` | `province` | Head's value |
+| 6 | `SabteAhval_provincename` | `province_code` | Numeric encoding of province |
 | 7 | `isurban` | `is_urban` | Head's value |
 | 8 | `Decile` | `welfare_decile` | Head's value |
 | 9 | `Percentile` | `welfare_percentile` | Head's value |
@@ -71,15 +74,26 @@ Before any aggregation, compute these two helper columns on the individual table
 ---
 
 ## Step 4 — Yearly Financial Totals
-> Collapse all financial characteristics into one family-level total per year.
+> Collapse all non-card financial characteristics into one family-level total per year.
 
 | Family Field | Source Field(s) | Rule | Notes |
 |---|---|---|---|
-| `financial_1398_total` | `1398_CardPerMonth` | `SUM` | Total 1398 financial activity |
-| `financial_1399_total` | `1399_CardPerMonth`, `1399_MandehAval`, `1399_MandehAkhar` | `SUM` | Total 1399 financial activity |
-| `financial_1400_total` | `1400_CardPerMonth`, `1400_Variz`, `1400_MandehAval`, `1400_MandehAkhar` | `SUM` | Total 1400 financial activity |
-| `financial_1401_total` | `1401_CardPerMonth`, `1401_CardBeCardPerMonth`, `1401_PayaPerMonth`, `1401_SatnaPerMonth` | `SUM` | Total 1401 financial activity |
-| `financial_1402_total` | `1402_CardPerMonth`, `1402_CardBeCardPerMonth`, `1402_PayaPerMonth`, `1402_SatnaPerMonth` | `SUM` | Total 1402 financial activity |
+| `financial_1398_total` | — | `0` | No non-card financial component in 1398 |
+| `financial_1399_total` | `1399_MandehAval`, `1399_MandehAkhar` | `SUM` | Total 1399 non-card financial activity |
+| `financial_1400_total` | `1400_Variz`, `1400_MandehAval`, `1400_MandehAkhar` | `SUM` | Total 1400 non-card financial activity |
+| `financial_1401_total` | `1401_CardBeCardPerMonth`, `1401_PayaPerMonth`, `1401_SatnaPerMonth` | `SUM` | Total 1401 non-card financial activity |
+| `financial_1402_total` | `1402_CardBeCardPerMonth`, `1402_PayaPerMonth`, `1402_SatnaPerMonth` | `SUM` | Total 1402 non-card financial activity |
+
+## Step 4b — Card Spend Totals
+> Keep monthly card spend separate from the main financial totals.
+
+| Family Field | Source Field(s) | Rule | Notes |
+|---|---|---|---|
+| `card_spend_1398_total` | `1398_CardPerMonth` | `SUM` | 1398 card spend total |
+| `card_spend_1399_total` | `1399_CardPerMonth` | `SUM` | 1399 card spend total |
+| `card_spend_1400_total` | `1400_CardPerMonth` | `SUM` | 1400 card spend total |
+| `card_spend_1401_total` | `1401_CardPerMonth` | `SUM` | 1401 card spend total |
+| `card_spend_1402_total` | `1402_CardPerMonth` | `SUM` | 1402 card spend total |
 
 > These totals replace the earlier per-transaction financial outputs in the family dataset.
 
@@ -186,16 +200,17 @@ else                                       → "unclassified"
 
 | Category | # of Fields |
 |---|---|
-| Identity & Location | 9 |
+| Identity & Location | 12 |
 | Family Size & Composition | 10 |
 | Income & Wealth | 5 |
 | Yearly Financial Totals | 5 |
+| Card Spend Totals | 5 |
 | Travel | 7 |
 | Health & Disability | 6 |
 | Welfare & Social Support | 6 |
 | Insurance | 6 |
 | Employment & Retirement | 10 |
-| **Total** | **64 family-level features** |
+| **Total** | **72 family-level features** |
 
 ---
 
@@ -206,7 +221,7 @@ else                                       → "unclassified"
 | Binary — any member | `MAX` | Health flags, welfare support, insurance |
 | Binary — all members | `MIN` | Full-family coverage checks |
 | Count | `SUM` | Number of cars, trips, disabled members |
-| Numeric — individual | `SUM` | Income, year-level financial totals |
+| Numeric — individual | `SUM` | Income, non-card yearly financial totals, card spend totals |
 | Numeric — shared | `MAX` or head's value | Location, decile, postal code |
 | Categorical | Head's value | Province, county, urban/rural |
 | Age | `MEAN`, `MIN`, `MAX` | Family age profile |
@@ -220,4 +235,4 @@ else                                       → "unclassified"
 - **Missing `Id_Parent`**: treat as solo household; assign `family_id = id`.
 - **Duplicate financials**: the yearly financial totals are computed by summing the family-level rows across the component fields listed in Step 4. If a new source file duplicates household-level financial values across members, verify before changing the aggregation rule.
 - **Welfare decile**: do **not** average across members — take the head's decile. Averaging deciles is statistically meaningless here since it is a household-assigned rank.
-- **Year coverage**: financial fields span 1398–1402 (2019–2023) and are exported only as annual totals in the family dataset.
+- **Year coverage**: financial fields span 1398–1402 (2019–2023), with card spend exported separately from the annual non-card financial totals.
